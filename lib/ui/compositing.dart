@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// @dart = 2.9
+// @dart = 2.10
 
 part of dart.ui;
 
@@ -23,14 +23,21 @@ class Scene extends NativeFieldWrapperClass2 {
 
   /// Creates a raster image representation of the current state of the scene.
   /// This is a slow operation that is performed on a background thread.
+  ///
+  /// Callers must dispose the [Image] when they are done with it. If the result
+  /// will be shared with other methods or classes, [Image.clone] should be used
+  /// and each handle created must be disposed.
   Future<Image> toImage(int width, int height) {
     if (width <= 0 || height <= 0) {
       throw Exception('Invalid image dimensions.');
     }
-    return _futurize((_Callback<Image> callback) => _toImage(width, height, callback));
+    return _futurize((_Callback<Image> callback) => _toImage(width, height, (_Image image) {
+        callback(Image._(image));
+      }),
+    );
   }
 
-  String _toImage(int width, int height, _Callback<Image> callback) native 'Scene_toImage';
+  String _toImage(int width, int height, _Callback<_Image> callback) native 'Scene_toImage';
 
   /// Releases the resources used by this scene.
   ///
@@ -605,7 +612,7 @@ class SceneBuilder extends NativeFieldWrapperClass2 {
   ///
   /// Therefore, when implementing a subclass of the [Layer] concept defined in
   /// the rendering layer of Flutter's framework, once this is called, there's
-  /// no need to call [addToScene] for its children layers.
+  /// no need to call [Layer.addToScene] for its children layers.
   ///
   /// {@macro dart.ui.sceneBuilder.oldLayerVsRetained}
   void addRetained(EngineLayer retainedLayer) {
@@ -699,12 +706,12 @@ class SceneBuilder extends NativeFieldWrapperClass2 {
   /// texture just before resizing the Android view and un-freezes it when it is
   /// certain that a frame with the new size is ready.
   void addTexture(
-    int/*!*/ textureId, {
-    Offset/*!*/ offset = Offset.zero,
-    double/*!*/ width = 0.0,
-    double/*!*/ height = 0.0,
-    bool/*!*/ freeze = false,
-    FilterQuality/*!*/ filterQuality = FilterQuality.low,
+    int textureId, {
+    Offset offset = Offset.zero,
+    double width = 0.0,
+    double height = 0.0,
+    bool freeze = false,
+    FilterQuality filterQuality = FilterQuality.low,
   }) {
     assert(offset != null, 'Offset argument was null'); // ignore: unnecessary_null_comparison
     _addTexture(offset.dx, offset.dy, width, height, textureId, freeze, filterQuality.index);
@@ -714,8 +721,6 @@ class SceneBuilder extends NativeFieldWrapperClass2 {
       int filterQuality) native 'SceneBuilder_addTexture';
 
   /// Adds a platform view (e.g an iOS UIView) to the scene.
-  ///
-  /// Only supported on iOS, this is currently a no-op on other platforms.
   ///
   /// On iOS this layer splits the current output surface into two surfaces, one for the scene nodes
   /// preceding the platform view, and one for the scene nodes following the platform view.
@@ -729,6 +734,8 @@ class SceneBuilder extends NativeFieldWrapperClass2 {
   /// With a platform view in the scene, Quartz has to composite the two Flutter surfaces and the
   /// embedded UIView. In addition to that, on iOS versions greater than 9, the Flutter frames are
   /// synchronized with the UIView frames adding additional performance overhead.
+  ///
+  /// The `offset` argument is not used for iOS and Android.
   void addPlatformView(
     int viewId, {
     Offset offset = Offset.zero,

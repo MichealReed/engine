@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
+// @dart = 2.10
 part of engine;
 
 const bool _debugLogHistoryActions = false;
@@ -38,6 +38,11 @@ class TestLocationStrategy extends LocationStrategy {
 
   @override
   String get path => currentEntry.url;
+
+  @override
+  dynamic get state {
+    return currentEntry.state;
+  }
 
   int _currentEntryIndex;
   int get currentEntryIndex => _currentEntryIndex;
@@ -100,12 +105,12 @@ class TestLocationStrategy extends LocationStrategy {
   }
 
   @override
-  Future<void> back() {
+  Future<void> back({int count = 1}) {
     assert(withinAppHistory);
     // Browsers don't move back in history immediately. They do it at the next
     // event loop. So let's simulate that.
     return _nextEventLoop(() {
-      _currentEntryIndex--;
+      _currentEntryIndex = _currentEntryIndex - count;
       if (withinAppHistory) {
         _firePopStateEvent();
       }

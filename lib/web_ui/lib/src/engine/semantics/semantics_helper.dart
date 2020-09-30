@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
+// @dart = 2.10
 part of engine;
 
 /// The maximum [semanticsActivationAttempts] before we give up waiting for
@@ -331,7 +331,7 @@ class MobileSemanticsEnabler extends SemanticsEnabler {
         case 'touchstart':
         case 'touchend':
           final html.TouchEvent touch = event as html.TouchEvent;
-          activationPoint = touch.changedTouches.first.client;
+          activationPoint = touch.changedTouches!.first.client;
           break;
         default:
           // The event is not relevant, forward to framework as normal.
@@ -340,12 +340,12 @@ class MobileSemanticsEnabler extends SemanticsEnabler {
 
       final html.Rectangle<num> activatingElementRect =
           domRenderer.glassPaneElement!.getBoundingClientRect();
-      final double midX = activatingElementRect.left +
-          (activatingElementRect.right - activatingElementRect.left) / 2 as double;
-      final double midY = activatingElementRect.top +
-          (activatingElementRect.bottom - activatingElementRect.top) / 2 as double;
-      final double deltaX = activationPoint.x - midX as double;
-      final double deltaY = activationPoint.y - midY as double;
+      final double midX = (activatingElementRect.left +
+          (activatingElementRect.right - activatingElementRect.left) / 2).toDouble();
+      final double midY = (activatingElementRect.top +
+          (activatingElementRect.bottom - activatingElementRect.top) / 2).toDouble();
+      final double deltaX = activationPoint.x.toDouble() - midX;
+      final double deltaY = activationPoint.y.toDouble() - midY;
       final double deltaSquared = deltaX * deltaX + deltaY * deltaY;
       if (deltaSquared < 1.0) {
         safariEnableConditionPassed = true;

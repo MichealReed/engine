@@ -3,16 +3,17 @@
 // found in the LICENSE file.
 
 #include "flutter/shell/platform/linux/fl_platform_plugin.h"
-#include "flutter/shell/platform/linux/public/flutter_linux/fl_json_method_codec.h"
-#include "flutter/shell/platform/linux/public/flutter_linux/fl_method_channel.h"
 
 #include <gtk/gtk.h>
+#include <cstring>
+
+#include "flutter/shell/platform/linux/public/flutter_linux/fl_json_method_codec.h"
+#include "flutter/shell/platform/linux/public/flutter_linux/fl_method_channel.h"
 
 static constexpr char kChannelName[] = "flutter/platform";
 static constexpr char kBadArgumentsError[] = "Bad Arguments";
 static constexpr char kUnknownClipboardFormatError[] =
     "Unknown Clipboard Format";
-static constexpr char kClipboardRequestError[] = "Clipboard Request Failed";
 static constexpr char kFailedError[] = "Failed";
 static constexpr char kGetClipboardDataMethod[] = "Clipboard.getData";
 static constexpr char kSetClipboardDataMethod[] = "Clipboard.setData";
@@ -33,8 +34,9 @@ G_DEFINE_TYPE(FlPlatformPlugin, fl_platform_plugin, G_TYPE_OBJECT)
 static void send_response(FlMethodCall* method_call,
                           FlMethodResponse* response) {
   g_autoptr(GError) error = nullptr;
-  if (!fl_method_call_respond(method_call, response, &error))
+  if (!fl_method_call_respond(method_call, response, &error)) {
     g_warning("Failed to send method call response: %s", error->message);
+  }
 }
 
 // Called when clipboard text received.
@@ -43,17 +45,14 @@ static void clipboard_text_cb(GtkClipboard* clipboard,
                               gpointer user_data) {
   g_autoptr(FlMethodCall) method_call = FL_METHOD_CALL(user_data);
 
-  g_autoptr(FlMethodResponse) response = nullptr;
+  g_autoptr(FlValue) result = nullptr;
   if (text != nullptr) {
-    g_autoptr(FlValue) result = fl_value_new_map();
+    result = fl_value_new_map();
     fl_value_set_string_take(result, kTextKey, fl_value_new_string(text));
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
-  } else {
-    response = FL_METHOD_RESPONSE(fl_method_error_response_new(
-        kClipboardRequestError, "Failed to retrieve clipboard text from GTK",
-        nullptr));
   }
 
+  g_autoptr(FlMethodResponse) response =
+      FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   send_response(method_call, response);
 }
 
@@ -128,17 +127,19 @@ static void method_call_cb(FlMethodChannel* channel,
   FlValue* args = fl_method_call_get_args(method_call);
 
   g_autoptr(FlMethodResponse) response = nullptr;
-  if (strcmp(method, kSetClipboardDataMethod) == 0)
+  if (strcmp(method, kSetClipboardDataMethod) == 0) {
     response = clipboard_set_data(self, args);
-  else if (strcmp(method, kGetClipboardDataMethod) == 0)
+  } else if (strcmp(method, kGetClipboardDataMethod) == 0) {
     response = clipboard_get_data_async(self, method_call);
-  else if (strcmp(method, kSystemNavigatorPopMethod) == 0)
+  } else if (strcmp(method, kSystemNavigatorPopMethod) == 0) {
     response = system_navigator_pop(self);
-  else
+  } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
 
-  if (response != nullptr)
+  if (response != nullptr) {
     send_response(method_call, response);
+  }
 }
 
 static void fl_platform_plugin_dispose(GObject* object) {

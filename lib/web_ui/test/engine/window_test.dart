@@ -7,11 +7,16 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'dart:typed_data';
 
+import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
 import 'package:ui/ui.dart' as ui;
 import 'package:ui/src/engine.dart';
 
 void main() {
+  internalBootstrapBrowserTest(() => testMain);
+}
+
+void testMain() {
   test('onTextScaleFactorChanged preserves the zone', () {
     final Zone innerZone = Zone.current.fork();
 
@@ -224,6 +229,24 @@ void main() {
     await completer.future;
   });
 
+  test('sendPlatformMessage responds even when channel is unknown', () async {
+    bool responded = false;
+
+    final ByteData inputData = ByteData(4);
+    inputData.setUint32(0, 42);
+    window.sendPlatformMessage(
+      'flutter/__unknown__channel__',
+      null,
+      (outputData) {
+        responded = true;
+        expect(outputData, isNull);
+      },
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    expect(responded, isTrue);
+  });
+
   test('Window implements locale, locales, and locale change notifications', () async {
     // This will count how many times we notified about locale changes.
     int localeChangedCount = 0;
@@ -249,5 +272,21 @@ void main() {
     html.window.dispatchEvent(html.Event('languagechange'));
     expect(window.locales, isNotEmpty);
     expect(localeChangedCount, 1);
+  });
+
+  test('dispatches browser event on flutter/service_worker channel', () async {
+    final Completer<void> completer = Completer<void>();
+    html.window.addEventListener('flutter-first-frame', completer.complete);
+    final Zone innerZone = Zone.current.fork();
+
+    innerZone.runGuarded(() {
+      window.sendPlatformMessage(
+        'flutter/service_worker',
+        ByteData(0),
+        (outputData) { },
+      );
+    });
+
+    await expectLater(completer.future, completes);
   });
 }

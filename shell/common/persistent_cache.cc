@@ -4,12 +4,10 @@
 
 #include "flutter/shell/common/persistent_cache.h"
 
+#include <future>
 #include <memory>
 #include <string>
 #include <string_view>
-
-#include "rapidjson/document.h"
-#include "third_party/skia/include/utils/SkBase64.h"
 
 #include "flutter/fml/base32.h"
 #include "flutter/fml/file.h"
@@ -19,6 +17,8 @@
 #include "flutter/fml/paths.h"
 #include "flutter/fml/trace_event.h"
 #include "flutter/shell/version/version.h"
+#include "rapidjson/document.h"
+#include "third_party/skia/include/utils/SkBase64.h"
 
 namespace flutter {
 
@@ -76,6 +76,25 @@ void PersistentCache::ResetCacheForProcess() {
 
 void PersistentCache::SetCacheDirectoryPath(std::string path) {
   cache_base_path_ = path;
+}
+
+bool PersistentCache::Purge() {
+  // Make sure that this is called after the worker task runner setup so all the
+  // file system modifications would happen on that single thread to avoid
+  // racing.
+  FML_CHECK(GetWorkerTaskRunner());
+
+  std::promise<bool> removed;
+  GetWorkerTaskRunner()->PostTask(
+      [&removed, cache_directory = cache_directory_]() {
+        if (cache_directory->is_valid()) {
+          FML_LOG(INFO) << "Purge persistent cache.";
+          removed.set_value(RemoveFilesInDirectory(*cache_directory));
+        } else {
+          removed.set_value(false);
+        }
+      });
+  return removed.get_future().get();
 }
 
 namespace {
@@ -170,7 +189,13 @@ std::vector<PersistentCache::SkSLCache> PersistentCache::LoadSkSLs() {
   // However, we'd like to continue visit the asset dir even if this persistent
   // cache is invalid.
   if (IsValid()) {
-    fml::VisitFiles(*sksl_cache_directory_, visitor);
+    // In case `rewinddir` doesn't work reliably, load SkSLs from a freshly
+    // opened directory (https://github.com/flutter/flutter/issues/65258).
+    fml::UniqueFD fresh_dir =
+        fml::OpenDirectoryReadOnly(*cache_directory_, kSkSLSubdirName);
+    if (fresh_dir.is_valid()) {
+      fml::VisitFiles(fresh_dir, visitor);
+    }
   }
 
   std::unique_ptr<fml::Mapping> mapping = nullptr;
@@ -246,8 +271,6 @@ sk_sp<SkData> PersistentCache::load(const SkData& key) {
   auto result = PersistentCache::LoadFile(*cache_directory_, file_name);
   if (result != nullptr) {
     TRACE_EVENT0("flutter", "PersistentCacheLoadHit");
-  } else {
-    FML_LOG(INFO) << "PersistentCache::load failed: " << file_name;
   }
   return result;
 }

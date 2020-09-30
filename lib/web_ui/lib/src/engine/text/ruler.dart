@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
+// @dart = 2.10
 part of engine;
 
 /// Contains the subset of [ui.ParagraphStyle] properties that affect layout.
 class ParagraphGeometricStyle {
   ParagraphGeometricStyle({
+    required this.textDirection,
+    required this.textAlign,
     this.fontWeight,
     this.fontStyle,
     this.fontFamily,
@@ -21,6 +23,8 @@ class ParagraphGeometricStyle {
     this.shadows,
   });
 
+  final ui.TextDirection textDirection;
+  final ui.TextAlign textAlign;
   final ui.FontWeight? fontWeight;
   final ui.FontStyle? fontStyle;
   final String? fontFamily;
@@ -84,39 +88,42 @@ class ParagraphGeometricStyle {
 
     if (fontSize != null) {
       result.write(fontSize!.floor());
-      result.write('px');
     } else {
       result.write(DomRenderer.defaultFontSize);
     }
-    result.write(' ');
+    result.write('px ');
     result.write(canonicalizeFontFamily(effectiveFontFamily));
 
     return result.toString();
   }
 
   @override
-  bool operator ==(dynamic other) {
+  bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
     }
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    final ParagraphGeometricStyle typedOther = other;
-    return fontWeight == typedOther.fontWeight &&
-        fontStyle == typedOther.fontStyle &&
-        fontFamily == typedOther.fontFamily &&
-        fontSize == typedOther.fontSize &&
-        lineHeight == typedOther.lineHeight &&
-        maxLines == typedOther.maxLines &&
-        letterSpacing == typedOther.letterSpacing &&
-        wordSpacing == typedOther.wordSpacing &&
-        decoration == typedOther.decoration &&
-        ellipsis == typedOther.ellipsis;
+    return other is ParagraphGeometricStyle
+        && other.textDirection == textDirection
+        && other.textAlign == textAlign
+        && other.fontWeight == fontWeight
+        && other.fontStyle == fontStyle
+        && other.fontFamily == fontFamily
+        && other.fontSize == fontSize
+        && other.lineHeight == lineHeight
+        && other.maxLines == maxLines
+        && other.letterSpacing == letterSpacing
+        && other.wordSpacing == wordSpacing
+        && other.decoration == decoration
+        && other.ellipsis == ellipsis;
   }
 
   @override
   int get hashCode => _cachedHashCode ??= ui.hashValues(
+        textDirection,
+        textAlign,
         fontWeight,
         fontStyle,
         fontFamily,
@@ -132,7 +139,9 @@ class ParagraphGeometricStyle {
   @override
   String toString() {
     if (assertionsEnabled) {
-      return '$runtimeType(fontWeight: $fontWeight, fontStyle: $fontStyle,'
+      return '$runtimeType(textDirection: $textDirection, textAlign: $textAlign,'
+          ' fontWeight: $fontWeight,'
+          ' fontStyle: $fontStyle,'
           ' fontFamily: $fontFamily, fontSize: $fontSize,'
           ' lineHeight: $lineHeight,'
           ' maxLines: $maxLines,'
@@ -246,6 +255,8 @@ class TextDimensions {
   void applyStyle(ParagraphGeometricStyle style) {
     final html.CssStyleDeclaration elementStyle = _element.style;
     elementStyle
+      ..direction = _textDirectionToCss(style.textDirection)
+      ..textAlign = textAlignToCssValue(style.textAlign, style.textDirection)
       ..fontSize = style.fontSize != null ? '${style.fontSize!.floor()}px' : null
       ..fontFamily = canonicalizeFontFamily(style.effectiveFontFamily)
       ..fontWeight =
@@ -629,6 +640,31 @@ class ParagraphRuler {
     );
   }
 
+  List<ui.TextBox> measurePlaceholderBoxes() {
+    assert(!_debugIsDisposed);
+    assert(_paragraph != null);
+
+    if (_paragraph!.placeholderCount == 0) {
+      return const <ui.TextBox>[];
+    }
+
+    final List<html.Element> placeholderElements =
+        constrainedDimensions._element.querySelectorAll('.$_placeholderClass');
+    final List<ui.TextBox> boxes = <ui.TextBox>[];
+
+    for (final html.Element element in placeholderElements) {
+      final html.Rectangle<num> rect = element.getBoundingClientRect();
+      boxes.add(ui.TextBox.fromLTRBD(
+        rect.left as double,
+        rect.top as double,
+        rect.right as double,
+        rect.bottom as double,
+        _paragraph!._textDirection,
+      ));
+    }
+    return boxes;
+  }
+
   /// Returns text position in a paragraph that contains multiple
   /// nested spans given an offset.
   int hitTest(ui.ParagraphConstraints constraints, ui.Offset offset) {
@@ -770,9 +806,9 @@ class ParagraphRuler {
       }
 
       boxes.add(ui.TextBox.fromLTRBD(
-        rect.left + alignOffset as double,
+        rect.left.toDouble() + alignOffset,
         rect.top as double,
-        rect.right + alignOffset as double,
+        rect.right.toDouble() + alignOffset,
         rect.bottom as double,
         textDirection,
       ));
@@ -906,6 +942,8 @@ class MeasurementResult {
   /// of each laid out line.
   final List<EngineLineMetrics>? lines;
 
+  final List<ui.TextBox> placeholderBoxes;
+
   /// The text align value of the paragraph.
   final ui.TextAlign textAlign;
 
@@ -924,6 +962,7 @@ class MeasurementResult {
     required this.alphabeticBaseline,
     required this.ideographicBaseline,
     required this.lines,
+    required this.placeholderBoxes,
     required ui.TextAlign? textAlign,
     required ui.TextDirection? textDirection,
   })  : assert(constraintWidth != null), // ignore: unnecessary_null_comparison

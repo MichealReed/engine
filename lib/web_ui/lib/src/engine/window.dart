@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
+// @dart = 2.10
 part of engine;
 
 /// When set to true, all platform messages will be printed to the console.
@@ -73,11 +73,11 @@ class EngineWindow extends ui.Window {
       double windowInnerHeight;
       final html.VisualViewport? viewport = html.window.visualViewport;
       if (viewport != null) {
-        windowInnerWidth = viewport.width * devicePixelRatio as double;
-        windowInnerHeight = viewport.height * devicePixelRatio as double;
+        windowInnerWidth = viewport.width!.toDouble() * devicePixelRatio;
+        windowInnerHeight = viewport.height!.toDouble() * devicePixelRatio;
       } else {
-        windowInnerWidth = html.window.innerWidth * devicePixelRatio;
-        windowInnerHeight = html.window.innerHeight * devicePixelRatio;
+        windowInnerWidth = html.window.innerWidth! * devicePixelRatio;
+        windowInnerHeight = html.window.innerHeight! * devicePixelRatio;
       }
       _physicalSize = ui.Size(
         windowInnerWidth,
@@ -90,9 +90,9 @@ class EngineWindow extends ui.Window {
     double windowInnerHeight;
     final html.VisualViewport? viewport = html.window.visualViewport;
     if (viewport != null) {
-      windowInnerHeight = viewport.height * devicePixelRatio as double;
+      windowInnerHeight = viewport.height!.toDouble() * devicePixelRatio;
     } else {
-      windowInnerHeight = html.window.innerHeight * devicePixelRatio;
+      windowInnerHeight = html.window.innerHeight! * devicePixelRatio;
     }
     final double bottomPadding = _physicalSize!.height - windowInnerHeight;
     _viewInsets =
@@ -117,20 +117,25 @@ class EngineWindow extends ui.Window {
     double height = 0;
     double width = 0;
     if (html.window.visualViewport != null) {
-      height = html.window.visualViewport!.height * devicePixelRatio as double;
-      width = html.window.visualViewport!.width * devicePixelRatio as double;
+      height = html.window.visualViewport!.height!.toDouble() * devicePixelRatio;
+      width = html.window.visualViewport!.width!.toDouble() * devicePixelRatio;
     } else {
-      height = html.window.innerHeight * devicePixelRatio;
-      width = html.window.innerWidth * devicePixelRatio;
+      height = html.window.innerHeight! * devicePixelRatio;
+      width = html.window.innerWidth! * devicePixelRatio;
     }
-    // First confirm both heught and width is effected.
-    if (_physicalSize!.height != height && _physicalSize!.width != width) {
-      // If prior to rotation height is bigger than width it should be the
-      // opposite after the rotation and vice versa.
-      if ((_physicalSize!.height > _physicalSize!.width && height < width) ||
-          (_physicalSize!.width > _physicalSize!.height && width < height)) {
-        // Rotation detected
-        return true;
+
+    // This method compares the new dimensions with the previous ones.
+    // Return false if the previous dimensions are not set.
+    if(_physicalSize != null) {
+      // First confirm both height and width are effected.
+      if (_physicalSize!.height != height && _physicalSize!.width != width) {
+        // If prior to rotation height is bigger than width it should be the
+        // opposite after the rotation and vice versa.
+        if ((_physicalSize!.height > _physicalSize!.width && height < width) ||
+            (_physicalSize!.width > _physicalSize!.height && width < height)) {
+          // Rotation detected
+          return true;
+        }
       }
     }
     return false;
@@ -146,12 +151,47 @@ class EngineWindow extends ui.Window {
   /// Overrides the value of [physicalSize] in tests.
   ui.Size? webOnlyDebugPhysicalSizeOverride;
 
-  @override
-  double get physicalDepth => double.maxFinite;
-
   /// Handles the browser history integration to allow users to use the back
   /// button, etc.
-  final BrowserHistory _browserHistory = BrowserHistory();
+  @visibleForTesting
+  BrowserHistory get browserHistory => _browserHistory;
+  BrowserHistory _browserHistory = MultiEntriesBrowserHistory();
+
+  @visibleForTesting
+  Future<void> debugSwitchBrowserHistory({required bool useSingle}) async {
+    if (useSingle)
+      await _useSingleEntryBrowserHistory();
+    else
+      await _useMultiEntryBrowserHistory();
+  }
+
+  /// This function should only be used for test setup. In real application, we
+  /// only allow one time switch from the MultiEntriesBrowserHistory to
+  /// the SingleEntryBrowserHistory to prevent the application to switch back
+  /// forth between router and non-router.
+  Future<void> _useMultiEntryBrowserHistory() async {
+    if (_browserHistory is MultiEntriesBrowserHistory) {
+      return;
+    }
+    final LocationStrategy? strategy = _browserHistory.locationStrategy;
+    if (strategy != null)
+      await _browserHistory.setLocationStrategy(null);
+    _browserHistory = MultiEntriesBrowserHistory();
+    if (strategy != null)
+      await _browserHistory.setLocationStrategy(strategy);
+  }
+
+  Future<void> _useSingleEntryBrowserHistory() async {
+    if (_browserHistory is SingleEntryBrowserHistory) {
+      return;
+    }
+    final LocationStrategy? strategy = _browserHistory.locationStrategy;
+    if (strategy != null)
+      await _browserHistory.setLocationStrategy(null);
+    _browserHistory = SingleEntryBrowserHistory();
+    if (strategy != null)
+      await _browserHistory.setLocationStrategy(strategy);
+  }
 
   /// Simulates clicking the browser's back button.
   Future<void> webOnlyBack() => _browserHistory.back();
@@ -179,7 +219,7 @@ class EngineWindow extends ui.Window {
   ///
   /// By setting this to null, the browser history will be disabled.
   set locationStrategy(LocationStrategy? strategy) {
-    _browserHistory.locationStrategy = strategy;
+    _browserHistory.setLocationStrategy(strategy);
   }
 
   /// Returns the currently active location strategy.
@@ -280,15 +320,15 @@ class EngineWindow extends ui.Window {
 
   static List<ui.Locale> parseBrowserLanguages() {
     // TODO(yjbanov): find a solution for IE
-    final bool languagesFeatureMissing = !js_util.hasProperty(html.window.navigator, 'languages');
-    if (languagesFeatureMissing || html.window.navigator.languages.isEmpty) {
+    var languages = html.window.navigator.languages;
+    if (languages == null || languages.isEmpty) {
       // To make it easier for the app code, let's not leave the locales list
       // empty. This way there's fewer corner cases for apps to handle.
       return const [_defaultLocale];
     }
 
     final List<ui.Locale> locales = <ui.Locale>[];
-    for (final String language in html.window.navigator.languages) {
+    for (final String language in languages) {
       final List<String> parts = language.split('-');
       if (parts.length > 1) {
         locales.add(ui.Locale(parts.first, parts.last));
@@ -494,6 +534,19 @@ class EngineWindow extends ui.Window {
     }
 
     switch (name) {
+      /// This should be in sync with shell/common/shell.cc
+      case 'flutter/skia':
+        const MethodCodec codec = JSONMethodCodec();
+        final MethodCall decoded = codec.decodeMethodCall(data);
+        switch (decoded.method) {
+          case 'Skia.setResourceCacheMaxBytes':
+            if (decoded.arguments is int) {
+              rasterizer?.setSkiaResourceCacheMaxBytes(decoded.arguments);
+            }
+            break;
+        }
+
+        return;
       case 'flutter/assets':
         assert(ui.webOnlyAssetManager != null); // ignore: unnecessary_null_comparison
         final String url = utf8.decode(data!.buffer.asUint8List());
@@ -550,6 +603,11 @@ class EngineWindow extends ui.Window {
         }
         break;
 
+      // Dispatched by the bindings to delay service worker initialization.
+      case 'flutter/service_worker':
+        html.window.dispatchEvent(html.Event('flutter-first-frame'));
+        return;
+
       case 'flutter/textinput':
         textEditing.channel.handleTextInput(data, callback);
         return;
@@ -590,19 +648,23 @@ class EngineWindow extends ui.Window {
       case 'flutter/navigation':
         const MethodCodec codec = JSONMethodCodec();
         final MethodCall decoded = codec.decodeMethodCall(data);
-        final Map<String, dynamic>? message = decoded.arguments;
+        final Map<String, dynamic> message = decoded.arguments as Map<String, dynamic>;
         switch (decoded.method) {
           case 'routeUpdated':
-          case 'routePushed':
-          case 'routeReplaced':
-            _browserHistory.setRouteName(message!['routeName']);
-            _replyToPlatformMessage(
-                callback, codec.encodeSuccessEnvelope(true));
+            _useSingleEntryBrowserHistory().then((void data) {
+              _browserHistory.setRouteName(message['routeName']);
+              _replyToPlatformMessage(
+                  callback, codec.encodeSuccessEnvelope(true));
+            });
             break;
-          case 'routePopped':
-            _browserHistory.setRouteName(message!['previousRouteName']);
+          case 'routeInformationUpdated':
+            assert(_browserHistory is MultiEntriesBrowserHistory);
+            _browserHistory.setRouteName(
+              message['location'],
+              state: message['state'],
+            );
             _replyToPlatformMessage(
-                callback, codec.encodeSuccessEnvelope(true));
+              callback, codec.encodeSuccessEnvelope(true));
             break;
         }
         // As soon as Flutter starts taking control of the app navigation, we
@@ -617,14 +679,10 @@ class EngineWindow extends ui.Window {
       return;
     }
 
-    // TODO(flutter_web): Some Flutter widgets send platform messages that we
-    // don't handle on web. So for now, let's just ignore them. In the future,
-    // we should consider uncommenting the following "callback(null)" line.
-
     // Passing [null] to [callback] indicates that the platform message isn't
     // implemented. Look at [MethodChannel.invokeMethod] to see how [null] is
     // handled.
-    // callback(null);
+    _replyToPlatformMessage(callback, null);
   }
 
   int _getHapticFeedbackDuration(String? type) {
@@ -690,7 +748,7 @@ class EngineWindow extends ui.Window {
     _brightnessMediaQueryListener = (html.Event event) {
       final html.MediaQueryListEvent mqEvent = event as html.MediaQueryListEvent;
       _updatePlatformBrightness(
-          mqEvent.matches ? ui.Brightness.dark : ui.Brightness.light);
+          mqEvent.matches! ? ui.Brightness.dark : ui.Brightness.light);
     };
     _brightnessMediaQuery.addListener(_brightnessMediaQueryListener);
     registerHotRestartListener(() {

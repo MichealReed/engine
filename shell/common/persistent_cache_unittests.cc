@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "flutter/shell/common/persistent_cache.h"
+
 #include <memory>
 
 #include "flutter/assets/directory_asset_bundle.h"
@@ -13,7 +15,6 @@
 #include "flutter/fml/file.h"
 #include "flutter/fml/log_settings.h"
 #include "flutter/fml/unique_fd.h"
-#include "flutter/shell/common/persistent_cache.h"
 #include "flutter/shell/common/shell_test.h"
 #include "flutter/shell/common/switches.h"
 #include "flutter/shell/version/version.h"
@@ -238,6 +239,38 @@ TEST_F(ShellTest, CanRemoveOldPersistentCache) {
 
   // Cleanup
   fml::RemoveFilesInDirectory(base_dir.fd());
+}
+
+TEST_F(ShellTest, CanPurgePersistentCache) {
+  fml::ScopedTemporaryDirectory base_dir;
+  ASSERT_TRUE(base_dir.fd().is_valid());
+  auto cache_dir = fml::CreateDirectory(
+      base_dir.fd(),
+      {"flutter_engine", GetFlutterEngineVersion(), "skia", GetSkiaVersion()},
+      fml::FilePermission::kReadWrite);
+  PersistentCache::SetCacheDirectoryPath(base_dir.path());
+  PersistentCache::ResetCacheForProcess();
+
+  // Generate a dummy persistent cache.
+  fml::DataMapping test_data(std::string("test"));
+  ASSERT_TRUE(fml::WriteAtomically(cache_dir, "test", test_data));
+  auto file = fml::OpenFileReadOnly(cache_dir, "test");
+  ASSERT_TRUE(file.is_valid());
+
+  // Run engine with purge_persistent_cache to remove the dummy cache.
+  auto settings = CreateSettingsForFixture();
+  settings.purge_persistent_cache = true;
+  auto config = RunConfiguration::InferFromSettings(settings);
+  std::unique_ptr<Shell> shell = CreateShell(settings);
+  RunEngine(shell.get(), std::move(config));
+
+  // Verify that the dummy is purged.
+  file = fml::OpenFileReadOnly(cache_dir, "test");
+  ASSERT_FALSE(file.is_valid());
+
+  // Cleanup
+  fml::RemoveFilesInDirectory(base_dir.fd());
+  DestroyShell(std::move(shell));
 }
 
 }  // namespace testing

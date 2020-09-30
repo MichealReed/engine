@@ -27,11 +27,13 @@ class Surface {
 
   virtual SkMatrix GetRootTransformation() const = 0;
 
-  virtual GrContext* GetContext() = 0;
+  virtual GrDirectContext* GetContext() = 0;
 
   virtual flutter::ExternalViewEmbedder* GetExternalViewEmbedder();
 
   virtual std::unique_ptr<GLContextResult> MakeRenderContextCurrent();
+
+  virtual bool ClearRenderContext();
 
  private:
   FML_DISALLOW_COPY_AND_ASSIGN(Surface);

@@ -7,7 +7,7 @@
 
 #include "flutter/fml/macros.h"
 #include "flutter/shell/gpu/gpu_surface_delegate.h"
-#include "flutter/shell/platform/darwin/ios/ios_surface.h"
+#import "flutter/shell/platform/darwin/ios/ios_surface.h"
 
 @class CAMetalLayer;
 
@@ -33,7 +33,7 @@ class IOSSurfaceMetal final : public IOSSurface, public GPUSurfaceDelegate {
   void UpdateStorageSizeIfNecessary() override;
 
   // |IOSSurface|
-  std::unique_ptr<Surface> CreateGPUSurface(GrContext* gr_context) override;
+  std::unique_ptr<Surface> CreateGPUSurface(GrDirectContext* gr_context) override;
 
   // |GPUSurfaceDelegate|
   ExternalViewEmbedder* GetExternalViewEmbedder() override;

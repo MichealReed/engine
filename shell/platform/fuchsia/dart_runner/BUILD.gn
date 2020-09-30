@@ -14,20 +14,12 @@ template("runner") {
   assert(defined(invoker.product), "The parameter 'product' must be defined")
   assert(defined(invoker.output_name),
          "The parameter 'output_name' must be defined")
-  assert(defined(invoker.extra_deps),
-         "The parameter 'extra_deps' must be defined")
 
   invoker_output_name = invoker.output_name
+  extra_defines = invoker.extra_defines
   extra_deps = invoker.extra_deps
-
-  extra_configs = []
   if (is_debug) {
-    extra_configs += [ "//third_party/dart/build/config:debug" ]
-  }
-
-  extra_defines = []
-  if (defined(invoker.extra_defines)) {
-    extra_defines += invoker.extra_defines
+    extra_defines += [ "DEBUG" ]  # Needed due to direct dart dependencies.
   }
 
   executable(target_name) {
@@ -46,20 +38,18 @@ template("runner") {
       "service_isolate.h",
     ]
 
-    configs += extra_configs
-
     defines = extra_defines
 
     dart_deps = []
     if (!invoker.product) {
       dart_deps += [
-        "//third_party/dart/runtime/bin:dart_io_api",
         "//flutter/shell/platform/fuchsia/runtime/dart/utils:utils",
+        "//third_party/dart/runtime/bin:dart_io_api",
       ]
     } else {
       dart_deps += [
-        "//third_party/dart/runtime/bin:dart_io_api_product",
         "//flutter/shell/platform/fuchsia/runtime/dart/utils:utils_product",
+        "//third_party/dart/runtime/bin:dart_io_api_product",
       ]
     }
 
@@ -88,11 +78,10 @@ template("runner") {
 runner("dart_jit_runner_bin") {
   output_name = "dart_jit_runner"
   product = false
-
+  extra_defines = []
   if (flutter_runtime_mode == "profile") {
-    extra_defines = [ "FLUTTER_PROFILE" ]
+    extra_defines += [ "FLUTTER_PROFILE" ]
   }
-
   extra_deps = [
     "//third_party/dart/runtime:libdart_jit",
     "//third_party/dart/runtime/platform:libdart_platform_jit",
@@ -102,9 +91,7 @@ runner("dart_jit_runner_bin") {
 runner("dart_jit_product_runner_bin") {
   output_name = "dart_jit_product_runner"
   product = true
-
   extra_defines = [ "DART_PRODUCT" ]
-
   extra_deps = [
     "//third_party/dart/runtime:libdart_jit_product",
     "//third_party/dart/runtime/platform:libdart_platform_jit_product",
@@ -114,12 +101,10 @@ runner("dart_jit_product_runner_bin") {
 runner("dart_aot_runner_bin") {
   output_name = "dart_aot_runner"
   product = false
-
   extra_defines = [ "AOT_RUNTIME" ]
   if (flutter_runtime_mode == "profile") {
     extra_defines += [ "FLUTTER_PROFILE" ]
   }
-
   extra_deps = [
     "embedder:dart_aot_snapshot_cc",
     "//third_party/dart/runtime:libdart_precompiled_runtime",
@@ -130,12 +115,10 @@ runner("dart_aot_runner_bin") {
 runner("dart_aot_product_runner_bin") {
   output_name = "dart_aot_product_runner"
   product = true
-
   extra_defines = [
     "AOT_RUNTIME",
     "DART_PRODUCT",
   ]
-
   extra_deps = [
     "embedder:dart_aot_product_snapshot_cc",
     "//third_party/dart/runtime:libdart_precompiled_runtime_product",
@@ -150,9 +133,7 @@ template("aot_runner_package") {
     product_suffix = "_product"
   }
   fuchsia_archive(target_name) {
-    deps = [
-      ":dart_aot${product_suffix}_runner_bin",
-    ]
+    deps = [ ":dart_aot${product_suffix}_runner_bin" ]
     if (!invoker.product) {
       deps += [
         "vmservice:vmservice_snapshot",

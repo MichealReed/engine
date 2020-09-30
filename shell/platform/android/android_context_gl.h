@@ -21,7 +21,7 @@ namespace flutter {
 ///
 ///
 /// This can be used in conjuction to unique_ptr to provide better guarantees
-/// about the lifespam of the `EGLSurface` object.
+/// about the lifespan of the `EGLSurface` object.
 ///
 class AndroidEGLSurface {
  public:
@@ -101,8 +101,7 @@ class AndroidContextGL : public AndroidContext {
 
   //----------------------------------------------------------------------------
   /// @return     Whether the current context is valid. That is, if the EGL
-  /// contexts
-  ///             were successfully created.
+  ///             contexts were successfully created.
   ///
   bool IsValid() const;
 
